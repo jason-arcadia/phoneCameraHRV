@@ -115,13 +115,17 @@ class PPGProcessor {
         const val FINGER_THRESHOLD = 100.0        // raw red-channel avg below this → finger present
     }
 
-    fun onFrame(rawIntensity: Double, timestampMs: Long) {
-        // Track raw red-channel for finger detection
-        rawBuffer.addLast(rawIntensity)
+    // yBrightness = Y-plane average (0–255); used only for finger detection.
+    // Keeping it separate from the red channel avoids the Cr-inflation problem:
+    // R = Y + 1.402*(Cr−128) can exceed 100 even with a finger on the lens,
+    // whereas Y alone reliably stays below 100 when tissue blocks the torch.
+    fun onFrame(redIntensity: Double, yBrightness: Double, timestampMs: Long) {
+        // Y-plane average → finger detection (threshold on raw luminance, proven reliable)
+        rawBuffer.addLast(yBrightness)
         if (rawBuffer.size > RAW_WINDOW) rawBuffer.removeFirst()
 
-        // Apply bandpass filter + rolling-mean normalisation
-        val filtered = filter.process(rawIntensity, timestampMs)
+        // Red channel → bandpass filter + rolling-mean normalisation → PPG signal
+        val filtered = filter.process(redIntensity, timestampMs)
 
         signalBuffer.add(filtered)
         timestampBuffer.add(timestampMs)
@@ -136,6 +140,9 @@ class PPGProcessor {
         if (rawBuffer.isEmpty()) return false
         return rawBuffer.average() < FINGER_THRESHOLD
     }
+
+    /** Last bandpass-filtered, mean-normalised sample; null until first frame arrives. */
+    fun getLastFilteredSample(): Double? = signalBuffer.lastOrNull()
 
     /** Clear all state — call at the start of each new measurement session. */
     fun reset() {

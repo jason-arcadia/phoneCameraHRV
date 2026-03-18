@@ -96,8 +96,8 @@ class MainActivity : ComponentActivity() {
 
     private fun startMeasurement() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        cameraManager = CameraManager(this, this) { intensity, timestampMs ->
-            viewModel.onFrame(intensity, timestampMs)
+        cameraManager = CameraManager(this, this) { red, yAvg, timestampMs ->
+            viewModel.onFrame(red, yAvg, timestampMs)
         }
         cameraManager?.start()
         viewModel.setRunning(true)

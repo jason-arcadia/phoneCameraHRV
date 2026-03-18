@@ -14,7 +14,9 @@ import java.util.concurrent.Executors
 class CameraManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
-    private val onFrame: (intensity: Double, timestampMs: Long) -> Unit
+    // red  = red channel (0–255) for PPG signal
+    // yAvg = Y-plane average (0–255) for finger detection
+    private val onFrame: (red: Double, yAvg: Double, timestampMs: Long) -> Unit
 ) {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var camera: Camera? = null
@@ -53,23 +55,26 @@ class CameraManager(
 }
 
 private class PPGAnalyzer(
-    private val onFrame: (Double, Long) -> Unit
+    private val onFrame: (red: Double, yAvg: Double, timestampMs: Long) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     override fun analyze(image: ImageProxy) {
-        // Convert camera sensor nanosecond timestamp to milliseconds
         val timestampMs = image.imageInfo.timestamp / 1_000_000L
-        onFrame(extractRedChannel(image), timestampMs)
+        val (red, yAvg) = extractChannels(image)
+        onFrame(red, yAvg, timestampMs)
         image.close()
     }
 
-    // YUV_420_888 red channel: R = clip(Y + 1.402 * (Cr - 128), 0, 255)
-    // Plane 0 = Y (full resolution), Plane 2 = V/Cr (half resolution, quarter pixels).
-    // Red channel is the best PPG channel: hemoglobin absorbs strongly at ~540 nm (green)
-    // but scatters less and has higher SNR through tissue at longer wavelengths with a torch.
-    private fun extractRedChannel(image: ImageProxy): Double {
+    // Returns Pair(redAvg, yAvg) over the centre 50×50 region.
+    //   redAvg = R = clip(Y + 1.402*(Cr−128), 0, 255)  — used for PPG signal
+    //   yAvg   = Y luminance average                    — used for finger detection
+    //
+    // Separating them is important: the Cr component elevates R values above Y when
+    // blood-filled tissue transmits reddish light, so the old Y-based threshold still
+    // reliably detects finger contact while R carries the cleaner PPG waveform.
+    private fun extractChannels(image: ImageProxy): Pair<Double, Double> {
         val yPlane = image.planes[0]
-        val vPlane = image.planes[2]  // Cr (red-difference chroma)
+        val vPlane = image.planes[2]  // V = Cr (red-difference chroma), half resolution
 
         val yBuf = yPlane.buffer
         val vBuf = vPlane.buffer
@@ -84,15 +89,17 @@ private class PPGAnalyzer(
         val startX = (width - regionSize) / 2
         val startY = (height - regionSize) / 2
 
-        var sum = 0.0
+        var redSum = 0.0
+        var ySum   = 0.0
         for (row in startY until startY + regionSize) {
             for (col in startX until startX + regionSize) {
                 val y  = yBuf[row * yRowStride + col * yPixStride].toInt() and 0xFF
                 val cr = vBuf[(row / 2) * vRowStride + (col / 2) * vPixStride].toInt() and 0xFF
-                val r  = (y + 1.402 * (cr - 128)).coerceIn(0.0, 255.0)
-                sum += r
+                redSum += (y + 1.402 * (cr - 128)).coerceIn(0.0, 255.0)
+                ySum   += y
             }
         }
-        return sum / (regionSize * regionSize)
+        val pixels = (regionSize * regionSize).toDouble()
+        return redSum / pixels to ySum / pixels
     }
 }

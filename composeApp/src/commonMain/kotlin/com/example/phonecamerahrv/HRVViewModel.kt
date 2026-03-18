@@ -45,17 +45,21 @@ class HRVViewModel : ViewModel() {
     private val _saveEvent = MutableSharedFlow<List<Double>>(extraBufferCapacity = 1)
     val saveEvent = _saveEvent.asSharedFlow()
 
-    fun onFrame(intensity: Double, timestampMs: Long) {
-        processor.onFrame(intensity, timestampMs)
+    fun onFrame(redIntensity: Double, yBrightness: Double, timestampMs: Long) {
+        processor.onFrame(redIntensity, yBrightness, timestampMs)
         val metrics = processor.getMetrics()
 
         _rmssd.value = metrics.rmssd
         _heartRate.value = metrics.heartRate
         _lastRR.value = metrics.lastRR
 
-        waveformBuffer.addLast(intensity)
-        if (waveformBuffer.size > WAVEFORM_SIZE) waveformBuffer.removeFirst()
-        _waveform.value = waveformBuffer.toList()
+        // Display the bandpass-filtered signal so the waveform shows a clean PPG curve
+        val filtered = processor.getLastFilteredSample()
+        if (filtered != null) {
+            waveformBuffer.addLast(filtered)
+            if (waveformBuffer.size > WAVEFORM_SIZE) waveformBuffer.removeFirst()
+            _waveform.value = waveformBuffer.toList()
+        }
 
         val fingerDetected = metrics.isFingerDetected
         val prevFinger = _isFingerDetected.value
