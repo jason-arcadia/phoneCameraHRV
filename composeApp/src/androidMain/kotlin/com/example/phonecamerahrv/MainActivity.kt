@@ -50,8 +50,9 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.saveEvent.collect { rrData ->
-                    val file = saveRRFile(rrData)
-                    if (coachEmail.isNotBlank()) sendToCoach(file)
+                    val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+                    val file = saveRRFile(rrData, timestamp)
+                    if (coachEmail.isNotBlank()) sendToCoach(file, timestamp)
                     stopMeasurement()
                 }
             }
@@ -102,10 +103,10 @@ class MainActivity : ComponentActivity() {
         viewModel.setRunning(false)
     }
 
-    private fun saveRRFile(rrData: List<Double>): File {
+    private fun saveRRFile(rrData: List<Double>, timestamp: String): File {
         val safeName = userName.ifBlank { "unknown" }.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val filename = "${safeName}_${timestamp}.txt"
+        val fileTimestamp = timestamp.replace(Regex("[: ]"), "-")
+        val filename = "${safeName}_${fileTimestamp}.txt"
         val dir = getExternalFilesDir(null) ?: filesDir
         val file = File(dir, filename)
         file.writeText(rrData.joinToString("\n"))
@@ -113,13 +114,14 @@ class MainActivity : ComponentActivity() {
         return file
     }
 
-    private fun sendToCoach(file: File) {
+    private fun sendToCoach(file: File, timestamp: String) {
         val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val name = userName.ifBlank { "unknown" }
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
+            type = "message/rfc822"
             putExtra(Intent.EXTRA_EMAIL, arrayOf(coachEmail))
-            putExtra(Intent.EXTRA_SUBJECT, "HRV Measurement — $userName")
-            putExtra(Intent.EXTRA_TEXT, "Please find the RR interval data attached.")
+            putExtra(Intent.EXTRA_SUBJECT, "HRV Measurement — $name — $timestamp")
+            putExtra(Intent.EXTRA_TEXT, "RR interval data from a 60-second stable window attached.")
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
