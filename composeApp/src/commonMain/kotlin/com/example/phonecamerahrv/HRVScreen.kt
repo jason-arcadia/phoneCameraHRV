@@ -62,12 +62,13 @@ fun HRVScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Stability status line
+            // Stability / progress status line
             if (isRunning) {
-                val (statusText, statusColor) = if (isStable)
-                    "Measuring: ${measurementSeconds}s" to Color(0xFF00CC44)
-                else
-                    "Stabilizing..." to Color(0xFFFFAA00)
+                val (statusText, statusColor) = when {
+                    measurementSeconds >= 70 -> "Saved!" to Color(0xFF2196F3)
+                    isStable -> "Measuring: ${measurementSeconds}s / 70s" to Color(0xFF00CC44)
+                    else -> "Stabilizing..." to Color(0xFFFFAA00)
+                }
                 Text(
                     text = statusText,
                     color = statusColor,

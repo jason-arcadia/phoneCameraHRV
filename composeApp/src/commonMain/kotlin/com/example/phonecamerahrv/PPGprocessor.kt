@@ -12,7 +12,9 @@ data class HRVMetrics(
 class PPGProcessor {
     private val signalBuffer = mutableListOf<Double>()
     private val timestampBuffer = mutableListOf<Long>()
+    // Parallel lists: rrTimestamps[i] is the camera timestamp of the peak ending rrIntervals[i]
     private val rrIntervals = mutableListOf<Double>()
+    private val rrTimestamps = mutableListOf<Long>()
     private val peakTimestamps = mutableListOf<Long>()
     private var lastDetectedPeakTimestamp = -1L
 
@@ -21,7 +23,7 @@ class PPGProcessor {
         private const val PEAK_HALF_WINDOW = 8  // ~0.27s at 30 fps
         private const val MIN_RR_MS = 300L       // 200 bpm max
         private const val MAX_RR_MS = 2000L      // 30 bpm min
-        private const val MAX_RR_COUNT = 20
+        private const val MAX_RR_COUNT = 100     // enough for 70s at 60 bpm
         private const val STABILITY_WINDOW = 30  // ~1 second at 30 fps
         const val STABLE_VARIANCE_THRESHOLD = 150.0
     }
@@ -33,7 +35,6 @@ class PPGProcessor {
             signalBuffer.removeAt(0)
             timestampBuffer.removeAt(0)
         }
-        // Only accumulate RR intervals during stable signal segments
         if (isSignalStable()) detectPeak()
     }
 
@@ -66,7 +67,11 @@ class PPGProcessor {
             val rr = timestamp - peakTimestamps.last()
             if (rr in MIN_RR_MS..MAX_RR_MS) {
                 rrIntervals.add(rr.toDouble())
-                if (rrIntervals.size > MAX_RR_COUNT) rrIntervals.removeAt(0)
+                rrTimestamps.add(timestamp)
+                if (rrIntervals.size > MAX_RR_COUNT) {
+                    rrIntervals.removeAt(0)
+                    rrTimestamps.removeAt(0)
+                }
             }
         }
 
@@ -74,6 +79,15 @@ class PPGProcessor {
         if (peakTimestamps.size > MAX_RR_COUNT + 1) peakTimestamps.removeAt(0)
         lastDetectedPeakTimestamp = timestamp
     }
+
+    /** Returns RR intervals (ms) whose end-peak timestamp falls within [fromMs, toMs]. */
+    fun getRRIntervalsInRange(fromMs: Long, toMs: Long): List<Double> =
+        rrTimestamps.zip(rrIntervals)
+            .filter { (ts, _) -> ts in fromMs..toMs }
+            .map { (_, rr) -> rr }
+
+    /** Camera-sensor timestamp (ms) of the most recent frame received. */
+    fun getLastTimestampMs(): Long = timestampBuffer.lastOrNull() ?: 0L
 
     fun getMetrics(): HRVMetrics {
         val stable = isSignalStable()
