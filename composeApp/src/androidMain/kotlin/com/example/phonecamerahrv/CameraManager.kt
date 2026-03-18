@@ -59,18 +59,24 @@ private class PPGAnalyzer(
     override fun analyze(image: ImageProxy) {
         // Convert camera sensor nanosecond timestamp to milliseconds
         val timestampMs = image.imageInfo.timestamp / 1_000_000L
-        onFrame(extractGreenIntensity(image), timestampMs)
+        onFrame(extractRedChannel(image), timestampMs)
         image.close()
     }
 
-    // YUV_420_888: Y = 0.299R + 0.587G + 0.114B
-    // Averaging the Y (luminance) plane over the center region gives a green-dominated
-    // intensity signal suitable for PPG — green has the highest weight (0.587).
-    private fun extractGreenIntensity(image: ImageProxy): Double {
+    // YUV_420_888 red channel: R = clip(Y + 1.402 * (Cr - 128), 0, 255)
+    // Plane 0 = Y (full resolution), Plane 2 = V/Cr (half resolution, quarter pixels).
+    // Red channel is the best PPG channel: hemoglobin absorbs strongly at ~540 nm (green)
+    // but scatters less and has higher SNR through tissue at longer wavelengths with a torch.
+    private fun extractRedChannel(image: ImageProxy): Double {
         val yPlane = image.planes[0]
-        val buffer = yPlane.buffer
-        val rowStride = yPlane.rowStride
-        val pixelStride = yPlane.pixelStride
+        val vPlane = image.planes[2]  // Cr (red-difference chroma)
+
+        val yBuf = yPlane.buffer
+        val vBuf = vPlane.buffer
+        val yRowStride = yPlane.rowStride
+        val yPixStride = yPlane.pixelStride
+        val vRowStride = vPlane.rowStride
+        val vPixStride = vPlane.pixelStride
 
         val width = image.width
         val height = image.height
@@ -78,13 +84,15 @@ private class PPGAnalyzer(
         val startX = (width - regionSize) / 2
         val startY = (height - regionSize) / 2
 
-        var sum = 0L
+        var sum = 0.0
         for (row in startY until startY + regionSize) {
             for (col in startX until startX + regionSize) {
-                val index = row * rowStride + col * pixelStride
-                sum += buffer.get(index).toInt() and 0xFF
+                val y  = yBuf[row * yRowStride + col * yPixStride].toInt() and 0xFF
+                val cr = vBuf[(row / 2) * vRowStride + (col / 2) * vPixStride].toInt() and 0xFF
+                val r  = (y + 1.402 * (cr - 128)).coerceIn(0.0, 255.0)
+                sum += r
             }
         }
-        return sum.toDouble() / (regionSize * regionSize)
+        return sum / (regionSize * regionSize)
     }
 }

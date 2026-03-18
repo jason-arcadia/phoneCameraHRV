@@ -82,7 +82,14 @@ class HRVViewModel : ViewModel() {
 
     fun setRunning(running: Boolean) {
         _isRunning.value = running
-        if (!running) {
+        if (running) {
+            processor.reset()
+            waveformBuffer.clear()
+            _waveform.value = emptyList()
+            _rmssd.value = 0.0
+            _heartRate.value = 0.0
+            _lastRR.value = 0.0
+        } else {
             viewModelScope.launch { resetCountdown() }
             _isStable.value = false
             _isFingerDetected.value = false
