@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startMeasurement() {
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         cameraManager = CameraManager(this, this) { intensity, timestampMs ->
             viewModel.onFrame(intensity, timestampMs)
         }
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopMeasurement() {
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         cameraManager?.stop()
         cameraManager = null
         viewModel.setRunning(false)
