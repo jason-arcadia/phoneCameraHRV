@@ -246,9 +246,12 @@ private fun PPGWaveform(samples: List<Double>, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.background(Color(0xFF0D1B0D))) {
         if (samples.size < 2) return@Canvas
 
-        val min = samples.min()
-        val max = samples.max()
-        val range = (max - min).coerceAtLeast(1.0)
+        // Scale the Y axis from the most recent 60 samples (~2 s at 30 fps) so that
+        // early filter-settling transients don't compress the steady-state curve.
+        val scaleWindow = samples.takeLast(60)
+        val min = scaleWindow.min()
+        val max = scaleWindow.max()
+        val range = (max - min).coerceAtLeast(1e-6)
         val stepX = size.width / (samples.size - 1)
 
         val path = Path()
