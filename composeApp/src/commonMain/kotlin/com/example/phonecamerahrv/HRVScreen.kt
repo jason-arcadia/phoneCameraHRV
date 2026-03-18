@@ -1,5 +1,7 @@
 package com.example.phonecamerahrv
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -17,6 +20,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +34,7 @@ fun HRVScreen(
     heartRate: Double,
     lastRR: Double,
     isRunning: Boolean,
+    waveform: List<Double>,
     onToggle: () -> Unit
 ) {
     MaterialTheme {
@@ -40,7 +48,17 @@ fun HRVScreen(
         ) {
             Text("HRV Monitor", fontSize = 28.sp, fontWeight = FontWeight.Bold)
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
+
+            PPGWaveform(
+                samples = waveform,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+
+            Spacer(Modifier.height(16.dp))
 
             MetricCard(
                 label = "Heart Rate",
@@ -57,7 +75,7 @@ fun HRVScreen(
                 value = if (lastRR > 0) "${lastRR.toLong()} ms" else "-- ms"
             )
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(24.dp))
 
             Button(
                 onClick = onToggle,
@@ -83,6 +101,34 @@ fun HRVScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun PPGWaveform(samples: List<Double>, modifier: Modifier = Modifier) {
+    Canvas(
+        modifier = modifier.background(Color(0xFF0D1B0D))
+    ) {
+        if (samples.size < 2) return@Canvas
+
+        val min = samples.min()
+        val max = samples.max()
+        val range = (max - min).coerceAtLeast(1.0)
+
+        val stepX = size.width / (samples.size - 1)
+
+        val path = Path()
+        samples.forEachIndexed { i, value ->
+            val x = i * stepX
+            val y = size.height * (1.0 - (value - min) / range).toFloat()
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+
+        drawPath(
+            path = path,
+            color = Color(0xFF00FF66),
+            style = Stroke(width = 2.dp.toPx())
+        )
     }
 }
 

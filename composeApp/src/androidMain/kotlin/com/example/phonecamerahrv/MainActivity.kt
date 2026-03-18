@@ -29,12 +29,14 @@ class MainActivity : ComponentActivity() {
             val heartRate by viewModel.heartRate.collectAsStateWithLifecycle()
             val lastRR by viewModel.lastRR.collectAsStateWithLifecycle()
             val isRunning by viewModel.isRunning.collectAsStateWithLifecycle()
+            val waveform by viewModel.waveform.collectAsStateWithLifecycle()
 
             App(
                 rmssd = rmssd,
                 heartRate = heartRate,
                 lastRR = lastRR,
                 isRunning = isRunning,
+                waveform = waveform,
                 onToggle = {
                     if (isRunning) stopMeasurement()
                     else requestCameraPermission.launch(Manifest.permission.CAMERA)

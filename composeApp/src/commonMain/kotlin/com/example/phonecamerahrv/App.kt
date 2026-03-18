@@ -8,6 +8,7 @@ fun App(
     heartRate: Double = 0.0,
     lastRR: Double = 0.0,
     isRunning: Boolean = false,
+    waveform: List<Double> = emptyList(),
     onToggle: () -> Unit = {}
 ) {
     HRVScreen(
@@ -15,6 +16,7 @@ fun App(
         heartRate = heartRate,
         lastRR = lastRR,
         isRunning = isRunning,
+        waveform = waveform,
         onToggle = onToggle
     )
 }
