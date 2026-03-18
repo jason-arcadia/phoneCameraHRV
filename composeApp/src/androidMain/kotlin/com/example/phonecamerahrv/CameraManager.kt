@@ -5,6 +5,7 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -17,6 +18,11 @@ class CameraManager(
 ) {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var camera: Camera? = null
+    private val previewUseCase = Preview.Builder().build()
+
+    fun setSurfaceProvider(surfaceProvider: Preview.SurfaceProvider) {
+        previewUseCase.setSurfaceProvider(surfaceProvider)
+    }
 
     fun start() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -32,6 +38,7 @@ class CameraManager(
             camera = cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
+                previewUseCase,
                 imageAnalysis
             )
             camera?.cameraControl?.enableTorch(true)

@@ -35,6 +35,9 @@ class HRVViewModel : ViewModel() {
     private val _isStable = MutableStateFlow(false)
     val isStable = _isStable.asStateFlow()
 
+    private val _isFingerDetected = MutableStateFlow(false)
+    val isFingerDetected = _isFingerDetected.asStateFlow()
+
     private val _measurementSeconds = MutableStateFlow(0)
     val measurementSeconds = _measurementSeconds.asStateFlow()
 
@@ -54,6 +57,19 @@ class HRVViewModel : ViewModel() {
         if (waveformBuffer.size > WAVEFORM_SIZE) waveformBuffer.removeFirst()
         _waveform.value = waveformBuffer.toList()
 
+        val fingerDetected = metrics.isFingerDetected
+        val prevFinger = _isFingerDetected.value
+        _isFingerDetected.value = fingerDetected
+
+        // When finger is removed, reset any in-progress measurement
+        if (!fingerDetected && prevFinger) {
+            _isStable.value = false
+            viewModelScope.launch { resetCountdown() }
+            return
+        }
+
+        if (!fingerDetected) return
+
         val stable = metrics.isStable
         if (stable != _isStable.value) {
             _isStable.value = stable
@@ -69,6 +85,7 @@ class HRVViewModel : ViewModel() {
         if (!running) {
             viewModelScope.launch { resetCountdown() }
             _isStable.value = false
+            _isFingerDetected.value = false
         }
     }
 

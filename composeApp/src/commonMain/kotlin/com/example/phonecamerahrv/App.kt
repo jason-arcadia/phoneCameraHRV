@@ -28,11 +28,13 @@ fun App(
     waveform: List<Double> = emptyList(),
     isStable: Boolean = false,
     measurementSeconds: Int = 0,
+    isFingerDetected: Boolean = false,
     userName: String = "",
     coachEmail: String = "",
     onUserNameChange: (String) -> Unit = {},
     onCoachEmailChange: (String) -> Unit = {},
-    onToggle: () -> Unit = {}
+    onToggle: () -> Unit = {},
+    cameraPreview: @Composable () -> Unit = {}
 ) {
     MaterialTheme {
         var selectedTab by remember { mutableStateOf(0) }
@@ -68,7 +70,9 @@ fun App(
                     waveform = waveform,
                     isStable = isStable,
                     measurementSeconds = measurementSeconds,
-                    onToggle = onToggle
+                    isFingerDetected = isFingerDetected,
+                    onToggle = onToggle,
+                    cameraPreview = cameraPreview
                 )
                 1 -> SettingsScreen(
                     userName = userName,

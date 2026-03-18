@@ -3,10 +3,11 @@ package com.example.phonecamerahrv
 import kotlin.math.sqrt
 
 data class HRVMetrics(
-    val rmssd: Double,      // ms
-    val heartRate: Double,  // bpm
-    val lastRR: Double,     // ms
-    val isStable: Boolean
+    val rmssd: Double,           // ms
+    val heartRate: Double,       // bpm
+    val lastRR: Double,          // ms
+    val isStable: Boolean,
+    val isFingerDetected: Boolean
 )
 
 class PPGProcessor {
@@ -26,6 +27,7 @@ class PPGProcessor {
         private const val MAX_RR_COUNT = 100     // enough for 70s at 60 bpm
         private const val STABILITY_WINDOW = 30  // ~1 second at 30 fps
         const val STABLE_VARIANCE_THRESHOLD = 150.0
+        const val FINGER_THRESHOLD = 100.0       // Y-plane avg below this means finger is covering lens
     }
 
     fun onFrame(intensity: Double, timestampMs: Long) {
@@ -35,7 +37,13 @@ class PPGProcessor {
             signalBuffer.removeAt(0)
             timestampBuffer.removeAt(0)
         }
-        if (isSignalStable()) detectPeak()
+        if (isFingerDetected() && isSignalStable()) detectPeak()
+    }
+
+    fun isFingerDetected(): Boolean {
+        if (signalBuffer.isEmpty()) return false
+        val window = signalBuffer.takeLast(minOf(STABILITY_WINDOW, signalBuffer.size))
+        return window.average() < FINGER_THRESHOLD
     }
 
     private fun isSignalStable(): Boolean {
@@ -91,13 +99,15 @@ class PPGProcessor {
 
     fun getMetrics(): HRVMetrics {
         val stable = isSignalStable()
+        val fingerDetected = isFingerDetected()
         val rr = rrIntervals.toList()
-        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, stable)
+        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, stable, fingerDetected)
         return HRVMetrics(
             rmssd = calculateRMSSD(rr),
             heartRate = 60000.0 / rr.average(),
             lastRR = rr.last(),
-            isStable = stable
+            isStable = stable,
+            isFingerDetected = fingerDetected
         )
     }
 

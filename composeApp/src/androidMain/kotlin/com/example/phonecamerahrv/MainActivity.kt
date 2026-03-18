@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
             val waveform by viewModel.waveform.collectAsStateWithLifecycle()
             val isStable by viewModel.isStable.collectAsStateWithLifecycle()
             val measurementSeconds by viewModel.measurementSeconds.collectAsStateWithLifecycle()
+            val isFingerDetected by viewModel.isFingerDetected.collectAsStateWithLifecycle()
 
             App(
                 rmssd = rmssd,
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
                 waveform = waveform,
                 isStable = isStable,
                 measurementSeconds = measurementSeconds,
+                isFingerDetected = isFingerDetected,
                 userName = userName,
                 coachEmail = coachEmail,
                 onUserNameChange = { userName = it; prefs.edit().putString("user_name", it).apply() },
@@ -82,6 +84,11 @@ class MainActivity : ComponentActivity() {
                 onToggle = {
                     if (isRunning) stopMeasurement()
                     else requestCameraPermission.launch(Manifest.permission.CAMERA)
+                },
+                cameraPreview = {
+                    CameraPreviewComposable(
+                        onSurfaceProviderReady = { cameraManager?.setSurfaceProvider(it) }
+                    )
                 }
             )
         }
