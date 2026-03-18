@@ -1,6 +1,7 @@
 package com.example.phonecamerahrv
 
 import android.content.Context
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -12,9 +13,10 @@ import java.util.concurrent.Executors
 class CameraManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
-    private val processor: PPGProcessor
+    private val onFrame: (intensity: Double, timestampMs: Long) -> Unit
 ) {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    private var camera: Camera? = null
 
     fun start() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -24,26 +26,33 @@ class CameraManager(
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
-                .also { it.setAnalyzer(analysisExecutor, PPGAnalyzer(processor)) }
+                .also { it.setAnalyzer(analysisExecutor, PPGAnalyzer(onFrame)) }
 
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
+            camera = cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 imageAnalysis
             )
+            camera?.cameraControl?.enableTorch(true)
         }, ContextCompat.getMainExecutor(context))
     }
 
     fun stop() {
+        camera?.cameraControl?.enableTorch(false)
+        camera = null
         analysisExecutor.shutdown()
     }
 }
 
-private class PPGAnalyzer(private val processor: PPGProcessor) : ImageAnalysis.Analyzer {
+private class PPGAnalyzer(
+    private val onFrame: (Double, Long) -> Unit
+) : ImageAnalysis.Analyzer {
 
     override fun analyze(image: ImageProxy) {
-        processor.onFrame(extractGreenIntensity(image))
+        // Convert camera sensor nanosecond timestamp to milliseconds
+        val timestampMs = image.imageInfo.timestamp / 1_000_000L
+        onFrame(extractGreenIntensity(image), timestampMs)
         image.close()
     }
 
