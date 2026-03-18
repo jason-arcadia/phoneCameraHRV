@@ -1,7 +1,7 @@
 package com.example.phonecamerahrv
 
 import android.Manifest
-import android.accounts.AccountManager
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -10,6 +10,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -25,22 +28,30 @@ class MainActivity : ComponentActivity() {
     private val viewModel: HRVViewModel by viewModels()
     private var cameraManager: CameraManager? = null
 
-    private val requestPermissions = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        if (results[Manifest.permission.CAMERA] == true) startMeasurement()
-        // GET_ACCOUNTS denial is handled gracefully in getGoogleAccount()
+    private val prefs by lazy { getSharedPreferences("hrv_prefs", MODE_PRIVATE) }
+    private var userName by mutableStateOf("")
+    private var coachEmail by mutableStateOf("")
+
+    private val requestCameraPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startMeasurement()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Observe save events: write file then stop camera
+        // Load persisted settings
+        userName = prefs.getString("user_name", "") ?: ""
+        coachEmail = prefs.getString("coach_email", "") ?: ""
+
+        // Observe save events: write file, email coach, then stop camera
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.saveEvent.collect { rrData ->
-                    saveRRFile(rrData)
+                    val file = saveRRFile(rrData)
+                    if (coachEmail.isNotBlank()) sendToCoach(file)
                     stopMeasurement()
                 }
             }
@@ -63,11 +74,13 @@ class MainActivity : ComponentActivity() {
                 waveform = waveform,
                 isStable = isStable,
                 measurementSeconds = measurementSeconds,
+                userName = userName,
+                coachEmail = coachEmail,
+                onUserNameChange = { userName = it; prefs.edit().putString("user_name", it).apply() },
+                onCoachEmailChange = { coachEmail = it; prefs.edit().putString("coach_email", it).apply() },
                 onToggle = {
                     if (isRunning) stopMeasurement()
-                    else requestPermissions.launch(
-                        arrayOf(Manifest.permission.CAMERA, Manifest.permission.GET_ACCOUNTS)
-                    )
+                    else requestCameraPermission.launch(Manifest.permission.CAMERA)
                 }
             )
         }
@@ -89,27 +102,28 @@ class MainActivity : ComponentActivity() {
         viewModel.setRunning(false)
     }
 
-    private fun saveRRFile(rrData: List<Double>) {
-        val account = getGoogleAccount()
+    private fun saveRRFile(rrData: List<Double>): File {
+        val safeName = userName.ifBlank { "unknown" }.replace(Regex("[^a-zA-Z0-9._-]"), "_")
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val safeName = account.replace(Regex("[^a-zA-Z0-9._-]"), "_")
         val filename = "${safeName}_${timestamp}.txt"
-
         val dir = getExternalFilesDir(null) ?: filesDir
         val file = File(dir, filename)
         file.writeText(rrData.joinToString("\n"))
-
         Toast.makeText(this, "Saved ${rrData.size} RR intervals → $filename", Toast.LENGTH_LONG).show()
+        return file
     }
 
-    private fun getGoogleAccount(): String {
-        return try {
-            AccountManager.get(this)
-                .getAccountsByType("com.google")
-                .firstOrNull()?.name ?: "unknown"
-        } catch (e: SecurityException) {
-            "unknown"
+    private fun sendToCoach(file: File) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_EMAIL, arrayOf(coachEmail))
+            putExtra(Intent.EXTRA_SUBJECT, "HRV Measurement — $userName")
+            putExtra(Intent.EXTRA_TEXT, "Please find the RR interval data attached.")
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        startActivity(Intent.createChooser(intent, "Send to coach"))
     }
 
     override fun onDestroy() {

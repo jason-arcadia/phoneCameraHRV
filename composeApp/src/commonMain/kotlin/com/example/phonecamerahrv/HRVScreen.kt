@@ -39,8 +39,7 @@ fun HRVScreen(
     measurementSeconds: Int,
     onToggle: () -> Unit
 ) {
-    MaterialTheme {
-        Column(
+    Column(
             modifier = Modifier
                 .fillMaxSize()
                 .safeContentPadding()
@@ -120,7 +119,6 @@ fun HRVScreen(
                 )
             }
         }
-    }
 }
 
 @Composable
