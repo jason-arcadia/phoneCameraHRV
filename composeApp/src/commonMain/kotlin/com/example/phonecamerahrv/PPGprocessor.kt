@@ -3,9 +3,10 @@ package com.example.phonecamerahrv
 import kotlin.math.sqrt
 
 data class HRVMetrics(
-    val rmssd: Double,     // ms
-    val heartRate: Double, // bpm
-    val lastRR: Double     // ms
+    val rmssd: Double,      // ms
+    val heartRate: Double,  // bpm
+    val lastRR: Double,     // ms
+    val isStable: Boolean
 )
 
 class PPGProcessor {
@@ -21,6 +22,8 @@ class PPGProcessor {
         private const val MIN_RR_MS = 300L       // 200 bpm max
         private const val MAX_RR_MS = 2000L      // 30 bpm min
         private const val MAX_RR_COUNT = 20
+        private const val STABILITY_WINDOW = 30  // ~1 second at 30 fps
+        const val STABLE_VARIANCE_THRESHOLD = 150.0
     }
 
     fun onFrame(intensity: Double, timestampMs: Long) {
@@ -30,7 +33,16 @@ class PPGProcessor {
             signalBuffer.removeAt(0)
             timestampBuffer.removeAt(0)
         }
-        detectPeak()
+        // Only accumulate RR intervals during stable signal segments
+        if (isSignalStable()) detectPeak()
+    }
+
+    private fun isSignalStable(): Boolean {
+        if (signalBuffer.size < STABILITY_WINDOW) return false
+        val window = signalBuffer.takeLast(STABILITY_WINDOW)
+        val mean = window.average()
+        val variance = window.sumOf { (it - mean) * (it - mean) } / window.size
+        return variance < STABLE_VARIANCE_THRESHOLD
     }
 
     private fun detectPeak() {
@@ -64,12 +76,14 @@ class PPGProcessor {
     }
 
     fun getMetrics(): HRVMetrics {
+        val stable = isSignalStable()
         val rr = rrIntervals.toList()
-        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0)
+        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, stable)
         return HRVMetrics(
             rmssd = calculateRMSSD(rr),
             heartRate = 60000.0 / rr.average(),
-            lastRR = rr.last()
+            lastRR = rr.last(),
+            isStable = stable
         )
     }
 

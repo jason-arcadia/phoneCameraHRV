@@ -30,6 +30,8 @@ class MainActivity : ComponentActivity() {
             val lastRR by viewModel.lastRR.collectAsStateWithLifecycle()
             val isRunning by viewModel.isRunning.collectAsStateWithLifecycle()
             val waveform by viewModel.waveform.collectAsStateWithLifecycle()
+            val isStable by viewModel.isStable.collectAsStateWithLifecycle()
+            val measurementSeconds by viewModel.measurementSeconds.collectAsStateWithLifecycle()
 
             App(
                 rmssd = rmssd,
@@ -37,6 +39,8 @@ class MainActivity : ComponentActivity() {
                 lastRR = lastRR,
                 isRunning = isRunning,
                 waveform = waveform,
+                isStable = isStable,
+                measurementSeconds = measurementSeconds,
                 onToggle = {
                     if (isRunning) stopMeasurement()
                     else requestCameraPermission.launch(Manifest.permission.CAMERA)

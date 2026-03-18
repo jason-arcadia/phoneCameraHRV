@@ -9,6 +9,8 @@ fun App(
     lastRR: Double = 0.0,
     isRunning: Boolean = false,
     waveform: List<Double> = emptyList(),
+    isStable: Boolean = false,
+    measurementSeconds: Int = 0,
     onToggle: () -> Unit = {}
 ) {
     HRVScreen(
@@ -17,6 +19,8 @@ fun App(
         lastRR = lastRR,
         isRunning = isRunning,
         waveform = waveform,
+        isStable = isStable,
+        measurementSeconds = measurementSeconds,
         onToggle = onToggle
     )
 }

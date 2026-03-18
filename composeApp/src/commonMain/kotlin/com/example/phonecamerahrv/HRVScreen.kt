@@ -35,6 +35,8 @@ fun HRVScreen(
     lastRR: Double,
     isRunning: Boolean,
     waveform: List<Double>,
+    isStable: Boolean,
+    measurementSeconds: Int,
     onToggle: () -> Unit
 ) {
     MaterialTheme {
@@ -58,6 +60,22 @@ fun HRVScreen(
                     .clip(RoundedCornerShape(12.dp))
             )
 
+            Spacer(Modifier.height(8.dp))
+
+            // Stability status line
+            if (isRunning) {
+                val (statusText, statusColor) = if (isStable)
+                    "Measuring: ${measurementSeconds}s" to Color(0xFF00CC44)
+                else
+                    "Stabilizing..." to Color(0xFFFFAA00)
+                Text(
+                    text = statusText,
+                    color = statusColor,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
+            }
+
             Spacer(Modifier.height(16.dp))
 
             MetricCard(
@@ -67,7 +85,7 @@ fun HRVScreen(
             Spacer(Modifier.height(16.dp))
             MetricCard(
                 label = "RMSSD",
-                value = if (rmssd > 0) "${(rmssd * 10).toLong() / 10.0} ms" else "-- ms"
+                value = if (rmssd > 0 && isStable) "${(rmssd * 10).toLong() / 10.0} ms" else "-- ms"
             )
             Spacer(Modifier.height(16.dp))
             MetricCard(
@@ -92,10 +110,10 @@ fun HRVScreen(
                 )
             }
 
-            if (isRunning) {
-                Spacer(Modifier.height(16.dp))
+            if (isRunning && !isStable) {
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Cover camera with your fingertip",
+                    text = "Cover camera firmly with your fingertip",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -106,15 +124,12 @@ fun HRVScreen(
 
 @Composable
 private fun PPGWaveform(samples: List<Double>, modifier: Modifier = Modifier) {
-    Canvas(
-        modifier = modifier.background(Color(0xFF0D1B0D))
-    ) {
+    Canvas(modifier = modifier.background(Color(0xFF0D1B0D))) {
         if (samples.size < 2) return@Canvas
 
         val min = samples.min()
         val max = samples.max()
         val range = (max - min).coerceAtLeast(1.0)
-
         val stepX = size.width / (samples.size - 1)
 
         val path = Path()
@@ -124,11 +139,7 @@ private fun PPGWaveform(samples: List<Double>, modifier: Modifier = Modifier) {
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
 
-        drawPath(
-            path = path,
-            color = Color(0xFF00FF66),
-            style = Stroke(width = 2.dp.toPx())
-        )
+        drawPath(path, color = Color(0xFF00FF66), style = Stroke(width = 2.dp.toPx()))
     }
 }
 
