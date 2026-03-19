@@ -78,7 +78,9 @@ data class HRVMetrics(
     val heartRate: Double,       // bpm
     val lastRR: Double,          // ms
     val isStable: Boolean,
-    val isFingerDetected: Boolean
+    val isFingerDetected: Boolean,
+    val validCount: Int,         // RR intervals accepted (300–1500 ms)
+    val rejectedCount: Int       // RR intervals outside physiological range
 )
 
 class PPGProcessor {
@@ -95,12 +97,13 @@ class PPGProcessor {
     private val rrTimestamps = mutableListOf<Long>()
     private val peakTimestamps = mutableListOf<Long>()
     private var lastDetectedPeakTimestamp = -1L
+    private var rejectedCount = 0
 
     companion object {
         private const val BUFFER_SIZE = 300
         private const val PEAK_HALF_WINDOW = 8   // ~0.27 s at 30 fps
         private const val MIN_RR_MS = 300L        // 200 bpm max
-        private const val MAX_RR_MS = 2000L       // 30 bpm min
+        private const val MAX_RR_MS = 1500L       // 40 bpm min — physiological validity gate
         private const val MAX_RR_COUNT = 100      // enough for 70 s at 60 bpm
         private const val STABILITY_WINDOW = 30   // ~1 second at 30 fps
         private const val RAW_WINDOW = 15         // ~0.5 s window for finger detection
@@ -150,6 +153,7 @@ class PPGProcessor {
         rrTimestamps.clear()
         peakTimestamps.clear()
         lastDetectedPeakTimestamp = -1L
+        rejectedCount = 0
         filter.reset()
     }
 
@@ -187,6 +191,8 @@ class PPGProcessor {
                     rrIntervals.removeAt(0)
                     rrTimestamps.removeAt(0)
                 }
+            } else {
+                rejectedCount++
             }
         }
 
@@ -208,13 +214,15 @@ class PPGProcessor {
         val stable = isSignalStable()
         val fingerDetected = isFingerDetected()
         val rr = rrIntervals.toList()
-        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, stable, fingerDetected)
+        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, stable, fingerDetected, 0, rejectedCount)
         return HRVMetrics(
             rmssd = calculateRMSSD(rr),
             heartRate = 60000.0 / rr.average(),
             lastRR = rr.last(),
             isStable = stable,
-            isFingerDetected = fingerDetected
+            isFingerDetected = fingerDetected,
+            validCount = rr.size,
+            rejectedCount = rejectedCount
         )
     }
 

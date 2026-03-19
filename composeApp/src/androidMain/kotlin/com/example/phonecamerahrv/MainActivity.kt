@@ -67,6 +67,8 @@ class MainActivity : ComponentActivity() {
             val isStable by viewModel.isStable.collectAsStateWithLifecycle()
             val measurementSeconds by viewModel.measurementSeconds.collectAsStateWithLifecycle()
             val isFingerDetected by viewModel.isFingerDetected.collectAsStateWithLifecycle()
+            val validCount by viewModel.validCount.collectAsStateWithLifecycle()
+            val rejectedCount by viewModel.rejectedCount.collectAsStateWithLifecycle()
 
             App(
                 rmssd = rmssd,
@@ -77,6 +79,8 @@ class MainActivity : ComponentActivity() {
                 isStable = isStable,
                 measurementSeconds = measurementSeconds,
                 isFingerDetected = isFingerDetected,
+                validCount = validCount,
+                rejectedCount = rejectedCount,
                 userName = userName,
                 coachEmail = coachEmail,
                 onUserNameChange = { userName = it; prefs.edit().putString("user_name", it).apply() },

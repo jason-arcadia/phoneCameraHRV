@@ -29,6 +29,8 @@ fun App(
     isStable: Boolean = false,
     measurementSeconds: Int = 0,
     isFingerDetected: Boolean = false,
+    validCount: Int = 0,
+    rejectedCount: Int = 0,
     userName: String = "",
     coachEmail: String = "",
     onUserNameChange: (String) -> Unit = {},
@@ -71,6 +73,8 @@ fun App(
                     isStable = isStable,
                     measurementSeconds = measurementSeconds,
                     isFingerDetected = isFingerDetected,
+                    validCount = validCount,
+                    rejectedCount = rejectedCount,
                     onToggle = onToggle,
                     cameraPreview = cameraPreview
                 )

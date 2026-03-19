@@ -47,6 +47,8 @@ fun HRVScreen(
     isStable: Boolean,
     measurementSeconds: Int,
     isFingerDetected: Boolean,
+    validCount: Int,
+    rejectedCount: Int,
     onToggle: () -> Unit,
     cameraPreview: @Composable () -> Unit = {}
 ) {
@@ -144,6 +146,14 @@ fun HRVScreen(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 15.sp
                     )
+                    if (validCount + rejectedCount > 0) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "✓ $validCount valid  ✗ $rejectedCount rejected",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp
+                        )
+                    }
                 }
 
                 Spacer(Modifier.weight(1f))

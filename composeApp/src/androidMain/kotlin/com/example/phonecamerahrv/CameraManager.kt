@@ -20,6 +20,7 @@ class CameraManager(
 ) {
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var camera: Camera? = null
+    private var cameraProvider: ProcessCameraProvider? = null
     private val previewUseCase = Preview.Builder().build()
 
     fun setSurfaceProvider(surfaceProvider: Preview.SurfaceProvider) {
@@ -29,15 +30,16 @@ class CameraManager(
     fun start() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
+            val provider = cameraProviderFuture.get()
+            cameraProvider = provider
 
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
                 .also { it.setAnalyzer(analysisExecutor, PPGAnalyzer(onFrame)) }
 
-            cameraProvider.unbindAll()
-            camera = cameraProvider.bindToLifecycle(
+            provider.unbindAll()
+            camera = provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 previewUseCase,
@@ -49,7 +51,9 @@ class CameraManager(
 
     fun stop() {
         camera?.cameraControl?.enableTorch(false)
+        cameraProvider?.unbindAll()   // releases the camera so the torch is cut immediately
         camera = null
+        cameraProvider = null
         analysisExecutor.shutdown()
     }
 }

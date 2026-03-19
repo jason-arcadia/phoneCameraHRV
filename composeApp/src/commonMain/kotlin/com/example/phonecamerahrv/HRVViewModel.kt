@@ -41,6 +41,12 @@ class HRVViewModel : ViewModel() {
     private val _measurementSeconds = MutableStateFlow(0)
     val measurementSeconds = _measurementSeconds.asStateFlow()
 
+    private val _validCount = MutableStateFlow(0)
+    val validCount = _validCount.asStateFlow()
+
+    private val _rejectedCount = MutableStateFlow(0)
+    val rejectedCount = _rejectedCount.asStateFlow()
+
     // Emits the filtered RR intervals (10s–70s window) when a full 70s session completes
     private val _saveEvent = MutableSharedFlow<List<Double>>(extraBufferCapacity = 1)
     val saveEvent = _saveEvent.asSharedFlow()
@@ -52,6 +58,8 @@ class HRVViewModel : ViewModel() {
         _rmssd.value = metrics.rmssd
         _heartRate.value = metrics.heartRate
         _lastRR.value = metrics.lastRR
+        _validCount.value = metrics.validCount
+        _rejectedCount.value = metrics.rejectedCount
 
         // Display the bandpass-filtered signal so the waveform shows a clean PPG curve
         val filtered = processor.getLastFilteredSample()
@@ -93,6 +101,8 @@ class HRVViewModel : ViewModel() {
             _rmssd.value = 0.0
             _heartRate.value = 0.0
             _lastRR.value = 0.0
+            _validCount.value = 0
+            _rejectedCount.value = 0
         } else {
             viewModelScope.launch { resetCountdown() }
             _isStable.value = false
