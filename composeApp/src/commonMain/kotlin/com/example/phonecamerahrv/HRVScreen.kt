@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.sqrt
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -256,19 +257,22 @@ private fun PPGWaveform(samples: List<Double>, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.background(Color(0xFF0D1B0D))) {
         if (samples.size < 2) return@Canvas
 
-        // Scale the Y axis from the most recent 60 samples (~2 s at 30 fps) so that
-        // early filter-settling transients don't compress the steady-state curve.
-        val scaleWindow = samples.takeLast(60)
-        val min = scaleWindow.min()
-        val max = scaleWindow.max()
-        val range = (max - min).coerceAtLeast(1e-6)
+        // Z-score normalise over the full 5-second buffer (150 samples at 30 fps).
+        // This keeps display amplitude consistent regardless of finger pressure or
+        // DC drift — the wave always occupies the same vertical band on screen.
+        val mean = samples.average()
+        val std = sqrt(samples.sumOf { (it - mean) * (it - mean) } / samples.size)
+
+        // Render within a fixed ±3 σ window; clips only genuine outliers.
+        val clip = 3.0
         val stepX = size.width / (samples.size - 1)
 
         val path = Path()
         samples.forEachIndexed { i, value ->
+            val z = if (std > 1e-10) ((value - mean) / std).coerceIn(-clip, clip) else 0.0
             val x = i * stepX
-            val y = size.height * (1.0 - (value - min) / range).toFloat()
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            val y = size.height.toDouble() * (1.0 - (z + clip) / (2.0 * clip))
+            if (i == 0) path.moveTo(x, y.toFloat()) else path.lineTo(x, y.toFloat())
         }
 
         drawPath(path, color = Color(0xFF00FF66), style = Stroke(width = 2.dp.toPx()))
