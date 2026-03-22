@@ -33,12 +33,23 @@ fun App(
     rejectedCount: Int = 0,
     userName: String = "",
     coachEmail: String = "",
+    latestScores: HRVScores? = null,
     onUserNameChange: (String) -> Unit = {},
     onCoachEmailChange: (String) -> Unit = {},
     onToggle: () -> Unit = {},
+    onDismissResults: () -> Unit = {},
     cameraPreview: @Composable () -> Unit = {}
 ) {
     MaterialTheme {
+        // Show results screen after a completed measurement
+        if (latestScores != null && !isRunning) {
+            ResultsScreen(
+                scores = latestScores,
+                onDismiss = onDismissResults
+            )
+            return@MaterialTheme
+        }
+
         var selectedTab by remember { mutableStateOf(0) }
 
         val topHorizontal = WindowInsets.safeDrawing.only(
@@ -54,12 +65,12 @@ fun App(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Measure") }
+                    text = { Text("測量") }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Settings") }
+                    text = { Text("設定") }
                 )
             }
 

@@ -51,6 +51,12 @@ class HRVViewModel : ViewModel() {
     private val _saveEvent = MutableSharedFlow<List<Double>>(extraBufferCapacity = 1)
     val saveEvent = _saveEvent.asSharedFlow()
 
+    private val _latestScores = MutableStateFlow<HRVScores?>(null)
+    val latestScores = _latestScores.asStateFlow()
+
+    fun setScores(scores: HRVScores) { _latestScores.value = scores }
+    fun clearScores() { _latestScores.value = null }
+
     fun onFrame(redIntensity: Double, yBrightness: Double, timestampMs: Long) {
         processor.onFrame(redIntensity, yBrightness, timestampMs)
         val metrics = processor.getMetrics()

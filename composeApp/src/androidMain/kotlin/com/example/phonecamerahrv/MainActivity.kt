@@ -22,6 +22,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.sqrt
 
 class MainActivity : ComponentActivity() {
 
@@ -42,17 +43,29 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Load persisted settings
         userName = prefs.getString("user_name", "") ?: ""
         coachEmail = prefs.getString("coach_email", "") ?: ""
 
-        // Observe save events: write file, email coach, then stop camera
+        // Observe save events: compute scores, save file, email coach, stop camera
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.saveEvent.collect { rrData ->
                     val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
                     val file = saveRRFile(rrData, timestamp)
                     if (coachEmail.isNotBlank()) sendToCoach(file, timestamp)
+
+                    // Compute HRV scores against personal baseline
+                    val rmssd = viewModel.rmssd.value
+                    val hr = viewModel.heartRate.value
+                    val storedBaseline = prefs.getFloat("baseline_rmssd", 0f).toDouble()
+                    val baseline = if (storedBaseline < 10.0) rmssd else storedBaseline
+                    val scores = calculateHRVScores(rmssd, hr, baseline)
+                    viewModel.setScores(scores)
+
+                    // Update personal baseline with exponential moving average
+                    val newBaseline = if (storedBaseline < 10.0) rmssd else 0.7 * storedBaseline + 0.3 * rmssd
+                    prefs.edit().putFloat("baseline_rmssd", newBaseline.toFloat()).apply()
+
                     stopMeasurement()
                 }
             }
@@ -69,6 +82,7 @@ class MainActivity : ComponentActivity() {
             val isFingerDetected by viewModel.isFingerDetected.collectAsStateWithLifecycle()
             val validCount by viewModel.validCount.collectAsStateWithLifecycle()
             val rejectedCount by viewModel.rejectedCount.collectAsStateWithLifecycle()
+            val latestScores by viewModel.latestScores.collectAsStateWithLifecycle()
 
             App(
                 rmssd = rmssd,
@@ -83,12 +97,14 @@ class MainActivity : ComponentActivity() {
                 rejectedCount = rejectedCount,
                 userName = userName,
                 coachEmail = coachEmail,
+                latestScores = latestScores,
                 onUserNameChange = { userName = it; prefs.edit().putString("user_name", it).apply() },
                 onCoachEmailChange = { coachEmail = it; prefs.edit().putString("coach_email", it).apply() },
                 onToggle = {
                     if (isRunning) stopMeasurement()
                     else requestCameraPermission.launch(Manifest.permission.CAMERA)
                 },
+                onDismissResults = { viewModel.clearScores() },
                 cameraPreview = {
                     CameraPreviewComposable(
                         onSurfaceProviderReady = { cameraManager?.setSurfaceProvider(it) }
@@ -121,7 +137,7 @@ class MainActivity : ComponentActivity() {
         val dir = getExternalFilesDir(null) ?: filesDir
         val file = File(dir, filename)
         file.writeText(rrData.joinToString("\n"))
-        Toast.makeText(this, "Saved ${rrData.size} RR intervals → $filename", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "已儲存 ${rrData.size} 個 RR 區間 → $filename", Toast.LENGTH_LONG).show()
         return file
     }
 
@@ -131,12 +147,12 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "message/rfc822"
             putExtra(Intent.EXTRA_EMAIL, arrayOf(coachEmail))
-            putExtra(Intent.EXTRA_SUBJECT, "HRV Measurement — $name — $timestamp")
-            putExtra(Intent.EXTRA_TEXT, "RR interval data from a 60-second stable window attached.")
+            putExtra(Intent.EXTRA_SUBJECT, "HRV 測量報告 — $name — $timestamp")
+            putExtra(Intent.EXTRA_TEXT, "附件為 60 秒穩定窗口的 RR 區間數據。")
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startActivity(Intent.createChooser(intent, "Send to coach"))
+        startActivity(Intent.createChooser(intent, "傳送給教練"))
     }
 
     override fun onDestroy() {
