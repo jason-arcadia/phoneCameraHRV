@@ -116,7 +116,10 @@ class MainActivity : ComponentActivity() {
                                 energyScore   = scores.energy,
                                 recoveryScore = scores.recovery,
                                 rrFileUrl     = rrFileUrl
-                            ).onFailure { e ->
+                            ).onSuccess {
+                                Toast.makeText(this@MainActivity,
+                                    "測量結果成功上傳雲端", Toast.LENGTH_LONG).show()
+                            }.onFailure { e ->
                                 Toast.makeText(this@MainActivity,
                                     "上傳失敗：${e.message}", Toast.LENGTH_LONG).show()
                             }
