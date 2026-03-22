@@ -1,7 +1,7 @@
 package com.example.phonecamerahrv
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -33,7 +32,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Canvas
 
 @Composable
 fun ResultsScreen(
@@ -60,16 +58,39 @@ fun ResultsScreen(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "${scores.heartRate.toLong()} bpm  ·  RMSSD ${(scores.rmssd * 10).toLong() / 10.0} ms",
+                text = "${scores.heartRate.toLong()} bpm  ·  RMSSD ${(scores.rmssd * 10).toLong() / 10.0} ms  ·  RR ${scores.lastRR.toLong()} ms",
                 color = Color.White.copy(alpha = 0.55f),
-                fontSize = 13.sp
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
             )
+            Spacer(Modifier.height(6.dp))
 
-            Spacer(Modifier.height(28.dp))
+            // Baseline context banner
+            if (scores.hasBaseline) {
+                Text(
+                    text = "與個人基準比較（基於 ${scores.sampleCount} 次歷史測量）",
+                    color = Color(0xFF90CAF9),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                val needed = 5 - scores.sampleCount
+                Text(
+                    text = if (needed > 0)
+                        "再完成 $needed 次測量可建立個人基準"
+                    else
+                        "第 ${scores.sampleCount} 次測量",
+                    color = Color(0xFFFFB74D),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
 
-            ScoreCard(label = "壓力", score = scores.stress)
+            Spacer(Modifier.height(24.dp))
+
+            ScoreCard(label = "壓力",  score = scores.stress)
             Spacer(Modifier.height(14.dp))
-            ScoreCard(label = "能量", score = scores.energy)
+            ScoreCard(label = "能量",  score = scores.energy)
             Spacer(Modifier.height(14.dp))
             ScoreCard(label = "恢復力", score = scores.recovery)
 
@@ -98,7 +119,7 @@ private fun ScoreCard(label: String, score: Int) {
     val scoreColor = when {
         score >= 70 -> Color(0xFF4CAF50)
         score >= 40 -> Color(0xFFFFB300)
-        else -> Color(0xFFF44336)
+        else        -> Color(0xFFF44336)
     }
     val description = scoreInterpretation(label, score)
 
@@ -114,41 +135,38 @@ private fun ScoreCard(label: String, score: Int) {
                 .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Circular gauge
+            // Circular gauge arc
             Box(
                 modifier = Modifier.size(84.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val strokeW = 9.dp.toPx()
-                    val inset = strokeW / 2f
+                    val inset   = strokeW / 2f
                     val arcSize = Size(size.width - strokeW, size.height - strokeW)
                     val topLeft = Offset(inset, inset)
 
                     drawArc(
-                        color = Color(0xFF2E2E3E),
-                        startAngle = 135f,
-                        sweepAngle = 270f,
+                        color     = Color(0xFF2E2E3E),
+                        startAngle = 135f, sweepAngle = 270f,
                         useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
+                        topLeft = topLeft, size = arcSize,
                         style = Stroke(strokeW, cap = StrokeCap.Round)
                     )
                     if (score > 0) {
                         drawArc(
-                            color = scoreColor,
+                            color      = scoreColor,
                             startAngle = 135f,
                             sweepAngle = 270f * score / 100f,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
+                            useCenter  = false,
+                            topLeft = topLeft, size = arcSize,
                             style = Stroke(strokeW, cap = StrokeCap.Round)
                         )
                     }
                 }
                 Text(
-                    text = "$score",
-                    fontSize = 22.sp,
+                    text = "$score%",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = scoreColor
                 )

@@ -364,7 +364,8 @@ private fun PPGWaveform(samples: List<Double>, modifier: Modifier = Modifier) {
         samples.forEachIndexed { i, value ->
             val z = if (std > 1e-10) ((value - mean) / std).coerceIn(-clip, clip) else 0.0
             val x = i * stepX
-            val y = size.height.toDouble() * (1.0 - (z + clip) / (2.0 * clip))
+            // Invert y so that signal valleys (PPG blood-volume peaks) render pointing up
+            val y = size.height.toDouble() * (z + clip) / (2.0 * clip)
             if (i == 0) path.moveTo(x, y.toFloat()) else path.lineTo(x, y.toFloat())
         }
         drawPath(path, color = Color(0xFF00FF66), style = Stroke(width = 2.dp.toPx()))

@@ -21,6 +21,13 @@ import androidx.compose.ui.Modifier
 
 @Composable
 fun App(
+    // Auth
+    isSignedIn: Boolean = false,
+    googleEmail: String = "",
+    googleDisplayName: String = "",
+    onGoogleSignIn: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+    // Measurement
     rmssd: Double = 0.0,
     heartRate: Double = 0.0,
     lastRR: Double = 0.0,
@@ -31,16 +38,23 @@ fun App(
     isFingerDetected: Boolean = false,
     validCount: Int = 0,
     rejectedCount: Int = 0,
-    userName: String = "",
-    coachEmail: String = "",
     latestScores: HRVScores? = null,
-    onUserNameChange: (String) -> Unit = {},
-    onCoachEmailChange: (String) -> Unit = {},
     onToggle: () -> Unit = {},
     onDismissResults: () -> Unit = {},
-    cameraPreview: @Composable () -> Unit = {}
+    cameraPreview: @Composable () -> Unit = {},
+    // Settings
+    userName: String = "",
+    apiBaseUrl: String = "",
+    onUserNameChange: (String) -> Unit = {},
+    onApiBaseUrlChange: (String) -> Unit = {}
 ) {
     MaterialTheme {
+        // Not signed in → show sign-in screen
+        if (!isSignedIn) {
+            SignInScreen(onGoogleSignIn = onGoogleSignIn)
+            return@MaterialTheme
+        }
+
         // Show results screen after a completed measurement
         if (latestScores != null && !isRunning) {
             ResultsScreen(
@@ -62,16 +76,10 @@ fun App(
                 .consumeWindowInsets(topHorizontal)
         ) {
             TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("測量") }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text("設定") }
-                )
+                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },
+                    text = { Text("測量") })
+                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
+                    text = { Text("設定") })
             }
 
             when (selectedTab) {
@@ -91,9 +99,12 @@ fun App(
                 )
                 1 -> SettingsScreen(
                     userName = userName,
-                    coachEmail = coachEmail,
+                    apiBaseUrl = apiBaseUrl,
+                    googleEmail = googleEmail,
+                    googleDisplayName = googleDisplayName,
                     onUserNameChange = onUserNameChange,
-                    onCoachEmailChange = onCoachEmailChange,
+                    onApiBaseUrlChange = onApiBaseUrlChange,
+                    onSignOut = onSignOut,
                     modifier = Modifier
                 )
             }

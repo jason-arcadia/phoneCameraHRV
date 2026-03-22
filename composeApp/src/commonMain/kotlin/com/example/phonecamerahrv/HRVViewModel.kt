@@ -139,6 +139,6 @@ class HRVViewModel : ViewModel() {
     }
 
     companion object {
-        private const val WAVEFORM_SIZE = 150 // ~5 seconds at 30 fps
+        private const val WAVEFORM_SIZE = 300 // ~10 seconds at 30 fps (half scroll speed)
     }
 }

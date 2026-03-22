@@ -76,7 +76,8 @@ class PPGSignalFilter {
 data class HRVMetrics(
     val rmssd: Double,           // ms
     val heartRate: Double,       // bpm
-    val lastRR: Double,          // ms
+    val lastRR: Double,          // ms — most recent RR interval
+    val meanRR: Double,          // ms — mean of all valid RR intervals in session
     val isStable: Boolean,
     val isFingerDetected: Boolean,
     val validCount: Int,         // RR intervals accepted (300–1500 ms)
@@ -101,18 +102,20 @@ class PPGProcessor {
 
     companion object {
         private const val BUFFER_SIZE = 300
-        private const val PEAK_HALF_WINDOW = 8   // ~0.27 s at 30 fps
-        private const val MIN_RR_MS = 300L        // 200 bpm max
-        private const val MAX_RR_MS = 1500L       // 40 bpm min — physiological validity gate
-        private const val MAX_RR_COUNT = 100      // enough for 70 s at 60 bpm
-        private const val STABILITY_WINDOW = 30   // ~1 second at 30 fps
-        private const val RAW_WINDOW = 15         // ~0.5 s window for finger detection
-        // Variance threshold on the bandpass-normalised signal (dimensionless fractional units).
-        // 2nd-order BPF passes more signal energy than the old 4th-order cascade:
-        // clean PPG amplitude ~1–3 % → variance ~5e-5 to 5e-4.
-        // Motion artifacts easily exceed 5e-3. Threshold at 2e-3 gives comfortable headroom.
+        private const val PEAK_HALF_WINDOW = 8    // ~0.27 s at 30 fps — local-max confirmation window
+        private const val MIN_RR_MS = 300L         // validity gate lower bound (physiological)
+        private const val MAX_RR_MS = 1500L        // validity gate upper bound (physiological)
+        private const val MAX_RR_COUNT = 100       // enough for 70 s at 60 bpm
+        private const val STABILITY_WINDOW = 30    // ~1 second at 30 fps
+        private const val RAW_WINDOW = 15          // ~0.5 s window for finger detection
         const val STABLE_VARIANCE_THRESHOLD = 2e-3
-        const val FINGER_THRESHOLD = 100.0        // raw red-channel avg below this → finger present
+        const val FINGER_THRESHOLD = 100.0
+
+        // Adaptive threshold peak detection
+        private const val REFRACTORY_MS = 500L           // dead-time after each peak
+        private const val ROLLING_MAX_WINDOW_MS = 3_000L // window for computing rolling amplitude max
+        private const val ADAPTIVE_THRESHOLD_RATIO = 0.6 // threshold = 60 % of rolling max
+        private const val MIN_THRESHOLD = 1e-4            // guard against flat/zero signal
     }
 
     // yBrightness = Y-plane average (0–255); used only for finger detection.
@@ -169,24 +172,41 @@ class PPGProcessor {
         val n = signalBuffer.size
         if (n < PEAK_HALF_WINDOW * 2 + 1) return
 
-        val center = n - PEAK_HALF_WINDOW - 1
-        val value = signalBuffer[center]
-        val mean = signalBuffer.average()
+        val center    = n - PEAK_HALF_WINDOW - 1
+        val centerTs  = timestampBuffer[center]
+        val value     = signalBuffer[center]
 
-        if (value <= mean) return
+        // ── 1. Refractory period: ignore the first 500 ms after the last peak ──────
+        if (peakTimestamps.isNotEmpty() && centerTs - peakTimestamps.last() < REFRACTORY_MS) return
 
+        // ── 2. Adaptive threshold on the inverted signal (valleys = blood-volume peaks) ─
+        //    Camera PPG dips when blood volume is highest, so cardiac events are valleys
+        //    (negative excursions) in the filtered signal.  We work on -signal throughout.
+        val windowStartMs = centerTs - ROLLING_MAX_WINDOW_MS
+        var windowIdx = center
+        while (windowIdx > 0 && timestampBuffer[windowIdx - 1] >= windowStartMs) windowIdx--
+        // Rolling amplitude of negative excursions = -(rolling min of original signal)
+        val rollingMin    = signalBuffer.subList(windowIdx, center + 1).minOrNull() ?: 0.0
+        val rollingMaxNeg = -rollingMin   // positive amplitude of deepest valley in window
+        val threshold     = maxOf(rollingMaxNeg * ADAPTIVE_THRESHOLD_RATIO, MIN_THRESHOLD)
+
+        // Valley condition: value must be sufficiently negative
+        if (-value <= threshold) return
+
+        // ── 3. Local-minimum confirmation: no neighbour in ±HALF_WINDOW should be lower ─
         for (i in (center - PEAK_HALF_WINDOW)..(center + PEAK_HALF_WINDOW)) {
-            if (i != center && signalBuffer[i] >= value) return
+            if (i != center && signalBuffer[i] <= value) return
         }
 
-        val timestamp = timestampBuffer[center]
-        if (timestamp == lastDetectedPeakTimestamp) return
+        // ── 4. Guard against re-processing the exact same timestamp ──────────────────
+        if (centerTs == lastDetectedPeakTimestamp) return
 
+        // ── 5. Record RR interval and apply physiological validity gate ───────────────
         if (peakTimestamps.isNotEmpty()) {
-            val rr = timestamp - peakTimestamps.last()
+            val rr = centerTs - peakTimestamps.last()
             if (rr in MIN_RR_MS..MAX_RR_MS) {
                 rrIntervals.add(rr.toDouble())
-                rrTimestamps.add(timestamp)
+                rrTimestamps.add(centerTs)
                 if (rrIntervals.size > MAX_RR_COUNT) {
                     rrIntervals.removeAt(0)
                     rrTimestamps.removeAt(0)
@@ -196,9 +216,9 @@ class PPGProcessor {
             }
         }
 
-        peakTimestamps.add(timestamp)
+        peakTimestamps.add(centerTs)
         if (peakTimestamps.size > MAX_RR_COUNT + 1) peakTimestamps.removeAt(0)
-        lastDetectedPeakTimestamp = timestamp
+        lastDetectedPeakTimestamp = centerTs
     }
 
     /** Returns RR intervals (ms) whose end-peak timestamp falls within [fromMs, toMs]. */
@@ -214,11 +234,13 @@ class PPGProcessor {
         val stable = isSignalStable()
         val fingerDetected = isFingerDetected()
         val rr = rrIntervals.toList()
-        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, stable, fingerDetected, 0, rejectedCount)
+        if (rr.isEmpty()) return HRVMetrics(0.0, 0.0, 0.0, 0.0, stable, fingerDetected, 0, rejectedCount)
+        val meanRR = rr.average()
         return HRVMetrics(
             rmssd = calculateRMSSD(rr),
-            heartRate = 60000.0 / rr.average(),
+            heartRate = 60000.0 / meanRR,
             lastRR = rr.last(),
+            meanRR = meanRR,
             isStable = stable,
             isFingerDetected = fingerDetected,
             validCount = rr.size,
