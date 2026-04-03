@@ -24,7 +24,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
 
     private val viewModel: HRVViewModel by viewModels()
-    private var cameraManager: CameraManager? = null
+    private var cameraController: CameraController? = null
 
     private val prefs by lazy { getSharedPreferences("hrv_prefs", MODE_PRIVATE) }
     private val measurementStore by lazy { MeasurementStore(this) }
@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
                 latestScores       = latestScores,
                 onToggle           = { if (isRunning) stopMeasurement() else requestCameraPermission.launch(Manifest.permission.CAMERA) },
                 onDismissResults   = { viewModel.clearScores() },
-                cameraPreview      = { CameraPreviewComposable(onSurfaceProviderReady = { cameraManager?.setSurfaceProvider(it) }) },
+                cameraPreview      = { cameraController?.let { CameraPreviewView(controller = it) } },
                 // Settings
                 userName           = userName,
                 apiBaseUrl         = apiBaseUrl,
@@ -203,15 +203,16 @@ class MainActivity : ComponentActivity() {
 
     private fun startMeasurement() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        cameraManager = CameraManager(this, this) { red, yAvg, ts -> viewModel.onFrame(red, yAvg, ts) }
-        cameraManager?.start()
+        val controller = CameraController(this, this)
+        cameraController = controller
+        controller.start { red, yAvg, ts -> viewModel.onFrame(red, yAvg, ts) }
         viewModel.setRunning(true)
     }
 
     private fun stopMeasurement() {
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        cameraManager?.stop()
-        cameraManager = null
+        cameraController?.stop()
+        cameraController = null
         viewModel.setRunning(false)
     }
 
@@ -225,6 +226,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        cameraManager?.stop()
+        cameraController?.stop()
     }
 }
